@@ -1,4 +1,3 @@
-const API='https://wss2.cex.uk.webuy.io/v3';
 const DATA_URL='data/catalog.json';
 const $=s=>document.querySelector(s);
 const els={query:$('#query'),maxPrice:$('#maxPrice'),category:$('#category'),onlineOnly:$('#onlineOnly'),hideZero:$('#hideZero'),searchBtn:$('#searchBtn'),locationBtn:$('#locationBtn'),sortBy:$('#sortBy'),results:$('#results'),message:$('#message'),status:$('#statusPill'),count:$('#resultCount'),cheapest:$('#cheapestPrice'),locationText:$('#locationText'),template:$('#cardTemplate')};
@@ -9,8 +8,9 @@ function showMessage(text){els.message.textContent=text;els.message.classList.to
 function money(v){return Number.isFinite(Number(v))?`£${Number(v).toFixed(2)}`:'—'}
 function productUrl(id){return `https://uk.webuy.com/product-detail?id=${encodeURIComponent(id)}`}
 function imageUrl(p){return p?.imageUrls?.medium||p?.imageUrls?.small||''}
-function inOnlineStock(p){return Number(p?.outOfEcomStock)===0||Number(p?.ecomQuantityOnHand||0)>0}
-function availableSomewhere(p){return Number(p?.outOfStock)===0||inOnlineStock(p)}
+function storesFor(p){return Array.isArray(p?.stores)?p.stores.filter(Boolean):[]}
+function inOnlineStock(p){return Number(p?.outOfEcomStock)===0||Number(p?.ecomQuantityOnHand||0)>0||p?.availability?.includes?.('In Stock Online')}
+function availableSomewhere(p){return inOnlineStock(p)||storesFor(p).length>0||Number(p?.outOfStock)===0}
 function normalise(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
 function ageLabel(iso){const t=Date.parse(iso);if(!Number.isFinite(t))return 'unknown age';const mins=Math.max(0,Math.round((Date.now()-t)/60000));if(mins<60)return `${mins} min old`;return `${Math.floor(mins/60)}h ${mins%60}m old`}
 
@@ -24,12 +24,13 @@ async function loadCatalog(){
     products=Array.isArray(json?.products)?json.products:[];
     dataMeta=json;
     if(!products.length)throw new Error('Catalogue is empty');
-    setStatus(`Cached CeX data • ${ageLabel(json.generatedAt)}`,true);
+    setStatus(`CeX search data • ${ageLabel(json.generatedAt)}`,true);
+    els.locationText.textContent=`${products.length} loaded`;
     render();
   }catch(e){
     console.error(e);
-    setStatus('Data updating');
-    showMessage('The new CeX data feed is being prepared. GitHub is fetching CeX stock server-side so the page no longer depends on browser proxies. Refresh this page in a few minutes.');
+    setStatus('Data unavailable');
+    showMessage('The CeX catalogue snapshot could not be loaded. The hourly updater preserves the last good catalogue, so try refreshing shortly.');
   }finally{els.searchBtn.disabled=false}
 }
 
@@ -49,34 +50,42 @@ function filtered(){
 
 function search(){
   if(!products.length){loadCatalog();return}
-  setStatus(`Cached CeX data • ${ageLabel(dataMeta?.generatedAt)}`,true);
+  setStatus(`CeX search data • ${ageLabel(dataMeta?.generatedAt)}`,true);
   render();
 }
 
 function render(){
   const list=filtered();els.results.innerHTML='';els.count.textContent=list.length;els.cheapest.textContent=list.length?money(Math.min(...list.map(p=>Number(p.sellPrice)))):'—';
-  if(!list.length){showMessage(products.length?'No cached products match the current search and filters. Try a broader search, a higher maximum price, or turn off Online stock only.':'CeX data is still being prepared.');return}else showMessage('');
+  if(!list.length){showMessage(products.length?'No products match the current filters. Try turning off Online stock only or increasing the price limit.':'CeX data is still being prepared.');return}else showMessage('');
   for(const p of list){
     const node=els.template.content.cloneNode(true),card=node.querySelector('.card'),img=node.querySelector('.thumb');
-    const src=imageUrl(p);if(src){img.src=src;img.alt=p.boxName||'CeX product'}else{img.style.display='none'}
-    node.querySelector('.category-label').textContent=p.categoryFriendlyName||p.categoryName||p.superCatFriendlyName||'CeX';
+    const src=imageUrl(p);if(src){img.src=src;img.alt=p.boxName||'CeX graphics card'}else{img.style.display='none'}
+    node.querySelector('.category-label').textContent=p.categoryFriendlyName||p.categoryName||'PCI-Express graphics card';
     node.querySelector('.rating').textContent=p.boxRating?`★ ${Number(p.boxRating).toFixed(1)}`:'';
     node.querySelector('.title').textContent=p.boxName||p.boxId;
     node.querySelector('.price').textContent=money(p.sellPrice);
-    const stock=node.querySelector('.stock-badge');stock.textContent=inOnlineStock(p)?`Online: ${Number(p.ecomQuantityOnHand||0)>0?p.ecomQuantityOnHand:'in stock'}`:(availableSomewhere(p)?'Store stock':'Out of stock');stock.classList.toggle('out',!availableSomewhere(p));
+    const stores=storesFor(p),stock=node.querySelector('.stock-badge');
+    stock.textContent=inOnlineStock(p)?`Online${Number(p.ecomQuantityOnHand||0)>0?`: ${p.ecomQuantityOnHand}`:''}`:(stores.length?`${stores.length} store${stores.length===1?'':'s'}`:'Out of stock');
+    stock.classList.toggle('out',!availableSomewhere(p));
     node.querySelector('.cash').textContent=`Cash trade-in ${money(p.cashPrice)}`;
     node.querySelector('.voucher').textContent=`Voucher ${money(p.exchangePrice)}`;
     const link=node.querySelector('.view-link');link.href=productUrl(p.boxId);
     const btn=node.querySelector('.stock-btn'),store=node.querySelector('.store-stock');
-    btn.textContent='Check at CeX';btn.addEventListener('click',()=>window.open(productUrl(p.boxId),'_blank','noopener'));
-    store.classList.add('hidden');
+    if(stores.length){
+      btn.textContent=`Show ${stores.length} store${stores.length===1?'':'s'}`;
+      store.textContent=stores.join(' • ');
+      btn.addEventListener('click',()=>{store.classList.toggle('hidden');btn.textContent=store.classList.contains('hidden')?`Show ${stores.length} store${stores.length===1?'':'s'}`:'Hide stores'});
+    }else{
+      btn.textContent='Check at CeX';btn.addEventListener('click',()=>window.open(productUrl(p.boxId),'_blank','noopener'));
+    }
     card.dataset.price=p.sellPrice;els.results.appendChild(node);
   }
 }
 
 function locationInfo(){
-  els.locationText.textContent='Not required';
-  showMessage('Location is no longer required for the main bargain search. Product links open CeX directly so you can check the latest individual store availability.');
+  const withStores=products.filter(p=>storesFor(p).length).length;
+  const online=products.filter(inOnlineStock).length;
+  showMessage(`This snapshot contains ${products.length} graphics cards at £${dataMeta?.maxPrice??50} or less: ${online} with online stock and ${withStores} with named CeX store availability. Store names come directly from CeX's search catalogue and may change between hourly updates.`);
 }
 
 els.searchBtn.addEventListener('click',search);els.query.addEventListener('keydown',e=>{if(e.key==='Enter')search()});
