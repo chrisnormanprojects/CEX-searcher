@@ -1,27 +1,15 @@
 {
-  "generatedAt": "2026-09-12T03:36:52.648Z",
+  "generatedAt": "2026-09-12T03:37:43.568Z",
   "source": "https://wss2.cex.uk.webuy.io/v3",
-  "scope": "Computing > Graphics and Capture Cards",
-  "mode": "graphics-capture-search-fallback",
+  "scope": "Computing > Graphics and Capture Cards > PCI-Express Graphics Cards",
+  "mode": "pci-express-search-fallback",
   "maxPrice": 50,
-  "productLine": {
-    "id": 7,
-    "name": "Graphics and Capture Cards"
+  "category": {
+    "id": 892,
+    "name": "PCI-Express Graphics Cards",
+    "totalBoxes": 2503
   },
-  "categoryCount": 2,
-  "catalogueListings": 2826,
-  "categories": [
-    {
-      "id": 892,
-      "name": "PCI-Express Graphics Cards",
-      "totalBoxes": 2503
-    },
-    {
-      "id": 1153,
-      "name": "Capture Cards",
-      "totalBoxes": 323
-    }
-  ],
+  "catalogueListings": 2503,
   "productCount": 0,
   "boxesBlocked": true,
   "products": []
