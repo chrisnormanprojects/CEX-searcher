@@ -1,45 +1,110 @@
-import { mkdir, writeFile, rm } from 'node:fs/promises';
-
-const META_API='https://wss2.cex.uk.webuy.io/v3';
-const SEARCH_API='https://search.webuy.io/1/indexes/*/queries';
-const PRIMARY_INDEX='prod_cex_uk_price_asc';
-const FALLBACK_INDEX='prod_cex_uk';
-const DATA_DIR='data';
-const SUPER_DIR=`${DATA_DIR}/super`; 
-const MANIFEST=`${DATA_DIR}/catalog.json`;
-const MAX_PRICE=50,HITS_PER_PAGE=100,QUERY_BATCH_SIZE=35,MAX_PAGES_PER_CATEGORY=20;
+import { mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { ATTRIBUTES, splitPartition, normaliseHit, reconcileCategories } from './catalogue-core.mjs';
+const META='https://wss2.cex.uk.webuy.io/v3',SEARCH='https://search.webuy.io/1/indexes/*/queries';
+const INDEX='prod_cex_uk_price_asc', PAGE_SIZE=100, BATCH_SIZE=12;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const arr=x=>Array.isArray(x)?x:[];
 const data=j=>j?.response?.data||{};
-const slug=s=>String(s||'other').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'other';
-
-async function fetchJson(url,options={},timeout=25000,attempt=1){
- const c=new AbortController(),timer=setTimeout(()=>c.abort(),timeout);
- try{const r=await fetch(url,{...options,signal:c.signal,headers:{accept:'application/json','content-type':'application/json','user-agent':'Mozilla/5.0 (compatible; CEX-searcher/3.1)',...(options.headers||{})}});const text=await r.text();if(!r.ok){const e=new Error(`HTTP ${r.status}: ${text.slice(0,180)}`);e.status=r.status;throw e}return JSON.parse(text)}
- catch(e){if(attempt<3&&(e.status===429||e.status>=500||e.name==='AbortError')){await sleep(800*attempt);return fetchJson(url,options,timeout,attempt+1)}throw e}finally{clearTimeout(timer)}
+const arr=x=>Array.isArray(x)?x:[];
+async function fetchJson(url,options={},attempt=1) {
+  try {
+    const r=await fetch(url,{...options,signal:AbortSignal.timeout(45000),headers:{accept:'application/json','content-type':'application/json','user-agent':'Mozilla/5.0 (compatible; CEX-searcher/4.0)'}});
+    if(!r.ok){const e=new Error(`HTTP ${r.status} from ${url}`);e.status=r.status;throw e;}
+    return await r.json();
+  } catch(e) {
+    if(attempt<4 && (e.status===429||e.status>=500||e.name==='TimeoutError'||e.name==='TypeError')){await sleep(attempt*1500);return fetchJson(url,options,attempt+1);}
+    throw e;
+  }
 }
-
-async function discoverMetadata(){
- const sj=await fetchJson(`${META_API}/supercats`),superCategories=arr(data(sj).superCats),productLines=[];
- for(const sc of superCategories){try{const pj=await fetchJson(`${META_API}/productlines?superCatIds=${encodeURIComponent(JSON.stringify([Number(sc.superCatId)]))}`);for(const p of arr(data(pj).productLines))productLines.push({...p,superCatId:Number(p.superCatId??sc.superCatId),superCatFriendlyName:p.superCatFriendlyName??sc.superCatFriendlyName})}catch(e){console.warn(e.message)}}
- const categories=[];
- for(const p of productLines){try{const cj=await fetchJson(`${META_API}/categories?productLineIds=${encodeURIComponent(JSON.stringify([Number(p.productLineId)]))}`);for(const c of arr(data(cj).categories))categories.push({...c,productLineId:Number(c.productLineId??p.productLineId),productLineName:c.productLineName??p.productLineName??p.productLineFriendlyName??'',superCatId:Number(c.superCatId??p.superCatId),superCatFriendlyName:c.superCatFriendlyName??p.superCatFriendlyName??''})}catch(e){console.warn(e.message)}}
- const by=new Map();for(const c of categories){const id=Number(c.categoryId);if(Number.isFinite(id))by.set(id,c)}
- const unique=[...by.values()];if(!unique.length)throw new Error('No categories');
- console.log(`Metadata: ${superCategories.length} super-categories, ${productLines.length} product lines, ${unique.length} categories`);return {superCategories,productLines,categories:unique};
+async function metadata(previous) {
+  const superCats=arr(data(await fetchJson(`${META}/supercats`)).superCats);
+  if(!superCats.length)throw new Error('No departments');
+  const lines=new Map(),cats=new Map();
+  for(const s of superCats) {
+    const ps=arr(data(await fetchJson(`${META}/productlines?superCatIds=${encodeURIComponent(JSON.stringify([Number(s.superCatId)]))}`)).productLines);
+    if(!ps.length)throw new Error(`No product lines for ${s.superCatId}`);
+    for(const p of ps) lines.set(Number(p.productLineId),{...p,superCatId:Number(p.superCatId??s.superCatId)});
+  }
+  for(const p of lines.values()) {
+    const cs=arr(data(await fetchJson(`${META}/categories?productLineIds=${encodeURIComponent(JSON.stringify([Number(p.productLineId)]))}`)).categories);
+    for(const c of cs) cats.set(Number(c.categoryId),{id:Number(c.categoryId),name:c.categoryFriendlyName??c.categoryName,categoryName:c.categoryName??'',productLineId:Number(c.productLineId??p.productLineId),productLineName:c.productLineName??p.productLineName??p.productLineFriendlyName??'',superCatId:Number(c.superCatId??p.superCatId),totalBoxes:Number(c.totalBoxes)||0});
+  }
+  if(!cats.size)throw new Error('No categories');
+  // A failed metadata branch must never silently remove a department/category.
+  const missing=(previous?.categories||[]).filter(c=>!cats.has(c.id));
+  if(missing.length)throw new Error(`Metadata omitted ${missing.length} previous categories (${missing.map(c=>c.id).join(',')}); review retirement before publishing`);
+  return {superCategories:superCats.map(s=>({id:Number(s.superCatId),name:s.superCatFriendlyName??s.superCatName})),categories:[...cats.values()],productLineCount:lines.size};
 }
-function paramsFor(categoryId,page,index){const p=new URLSearchParams({query:'',page:String(page),hitsPerPage:String(HITS_PER_PAGE),facetFilters:JSON.stringify([[`categoryId:${categoryId}`]]),filters:'boxVisibilityOnWeb=1',facets:'[]',numericFilters:JSON.stringify([`sellPrice<=${MAX_PRICE}`])});return {indexName:index,params:p.toString()}}
-async function queryBatch(items,index){const j=await fetchJson(SEARCH_API,{method:'POST',body:JSON.stringify({requests:items.map(x=>paramsFor(x.categoryId,x.page,index))})},30000);const r=arr(j?.results);if(r.length!==items.length)throw new Error('Incomplete Algolia batch');return r}
-function normaliseHit(h,metaById){const categoryId=Number(h.categoryId),sellPrice=Number(h.sellPrice);if(!Number.isFinite(categoryId)||!Number.isFinite(sellPrice)||sellPrice>MAX_PRICE)return null;const boxId=String(h.boxId??h.objectID??'').trim();if(!boxId)return null;const m=metaById.get(categoryId)||{},availability=arr(h.availability).map(String),stores=arr(h.stores).map(String),online=availability.includes('In Stock Online')||Number(h.ecomQuantity??0)>0,inStore=availability.includes('In Stock In Store')||stores.length>0;return {boxId,boxName:h.boxName??boxId,categoryId,categoryName:h.categoryName??m.categoryName??'',categoryFriendlyName:h.categoryFriendlyName??m.categoryFriendlyName??h.categoryName??`Category ${categoryId}`,productLineId:Number(h.productLineId??m.productLineId??0)||null,productLineName:h.productLineName??m.productLineName??'',superCatId:Number(h.scId??h.superCatId??m.superCatId??0)||null,superCatName:h.superCatName??m.superCatFriendlyName??'',superCatFriendlyName:h.superCatFriendlyName??m.superCatFriendlyName??h.superCatName??'',imageUrls:h.imageUrls??{},sellPrice,cashPrice:Number(h.cashPriceCalculated??h.cashBuyPrice??0),exchangePrice:Number(h.exchangePriceCalculated??h.exchangePrice??0),boxRating:Number(h.rating??0)||null,outOfStock:inStore||online?0:1,outOfEcomStock:online?0:1,ecomQuantityOnHand:Number(h.ecomQuantity??0),stores,availability,priceLastChanged:h.priceLastChanged??null};}
-async function collectAll(categories,index){const metaById=new Map(categories.map(c=>[Number(c.categoryId),c])),byId=new Map(),stats=new Map();let queue=categories.map(c=>({categoryId:Number(c.categoryId),page:0})),requests=0;while(queue.length){const next=[];for(let i=0;i<queue.length;i+=QUERY_BATCH_SIZE){const batch=queue.slice(i,i+QUERY_BATCH_SIZE),results=await queryBatch(batch,index);requests++;results.forEach((r,k)=>{const item=batch[k],hits=arr(r?.hits),nbHits=Number(r?.nbHits||0),nbPages=Number(r?.nbPages||0);stats.set(item.categoryId,{categoryId:item.categoryId,cheapListings:nbHits});for(const h of hits){const p=normaliseHit(h,metaById);if(p)byId.set(p.boxId,p)}if(item.page+1<nbPages&&item.page+1<MAX_PAGES_PER_CATEGORY)next.push({categoryId:item.categoryId,page:item.page+1})});console.log(`${index}: batch ${requests}, products=${byId.size}`);await sleep(120)}queue=next}return {products:[...byId.values()].sort((a,b)=>a.sellPrice-b.sellPrice||String(a.boxName).localeCompare(String(b.boxName))),stats,requests}}
-
-async function main(){
- const meta=await discoverMetadata();let result,mode='super-category-files-price-asc';try{result=await collectAll(meta.categories,PRIMARY_INDEX);if(!result.products.length)throw new Error('No products')}catch(e){console.warn(`Primary failed: ${e.message}`);mode='super-category-files-generic';result=await collectAll(meta.categories,FALLBACK_INDEX)}
- await mkdir(DATA_DIR,{recursive:true});await rm(SUPER_DIR,{recursive:true,force:true});await mkdir(SUPER_DIR,{recursive:true});
- const categories=meta.categories.map(c=>({id:Number(c.categoryId),name:c.categoryFriendlyName??c.categoryName??`Category ${c.categoryId}`,categoryName:c.categoryName??'',productLineId:Number(c.productLineId)||null,productLineName:c.productLineName??'',superCatId:Number(c.superCatId)||null,superCatName:c.superCatFriendlyName??'',totalBoxes:Number(c.totalBoxes||0)||null,cheapListings:Number(result.stats.get(Number(c.categoryId))?.cheapListings||0)}));
- const groups=new Map();for(const p of result.products){const id=Number(p.superCatId)||0;if(!groups.has(id))groups.set(id,[]);groups.get(id).push(p)}
- const superCategories=[];
- for(const s of meta.superCategories){const id=Number(s.superCatId),name=s.superCatFriendlyName??s.superCatName??`Department ${id}`,products=groups.get(id)||[],file=`super/${id}-${slug(name)}.json`,cats=categories.filter(c=>c.superCatId===id);const payload={generatedAt:new Date().toISOString(),superCatId:id,superCatName:name,maxPrice:MAX_PRICE,productCount:products.length,categories:cats,products};await writeFile(`${DATA_DIR}/${file}`,JSON.stringify(payload));superCategories.push({id,name,file,productCount:products.length,categoryCount:cats.length});console.log(`${name}: ${products.length} products -> data/${file}`)}
- const generatedAt=new Date().toISOString();const manifest={generatedAt,source:SEARCH_API,scope:'All CeX UK catalogue categories, split by super-category',mode,maxPrice:MAX_PRICE,superCategoryCount:superCategories.length,productLineCount:meta.productLines.length,categoryCount:categories.length,productCount:result.products.length,requestCount:result.requests,superCategories,categories};await writeFile(MANIFEST,JSON.stringify(manifest));console.log(`Wrote manifest + ${superCategories.length} super-category files; ${result.products.length} products across ${categories.length} categories`);
+function requestFor(item) {
+  return {indexName:INDEX,params:new URLSearchParams({query:'',page:String(item.page||0),hitsPerPage:String(PAGE_SIZE),
+    facetFilters:JSON.stringify(item.filters),filters:'boxVisibilityOnWeb=1',numericFilters:JSON.stringify(['sellPrice>=0','sellPrice<=50']),
+    facets:item.leaf?'[]':'["*"]',maxValuesPerFacet:'100',attributesToRetrieve:JSON.stringify(ATTRIBUTES),attributesToHighlight:'[]',attributesToSnippet:'[]'}).toString()};
 }
-main().catch(e=>{console.error(e);process.exit(1)});
+export async function collect(categories, query=async requests=>(await fetchJson(SEARCH,{method:'POST',body:JSON.stringify({requests})})).results, pause=sleep) {
+  let queue=categories.map(c=>({categoryId:c.id,filters:[`categoryId:${c.id}`],depth:0,page:0})),requests=0,partitions=0;
+  const products=new Map(),roots=new Map(),leaves=[];
+  while(queue.length) {
+    const next=[];
+    for(let i=0;i<queue.length;i+=BATCH_SIZE) {
+      const batch=queue.slice(i,i+BATCH_SIZE);
+      const results=await query(batch.map(requestFor));
+      if(!Array.isArray(results)||results.length!==batch.length)throw new Error('Incomplete search response');
+      requests++;
+      for(let k=0;k<batch.length;k++) {
+        const item=batch[k],r=results[k],n=Number(r.nbHits),hits=arr(r.hits);
+        if(r.message||r.error||!Number.isFinite(n))throw new Error(`Search error: ${r.message||r.error||'missing count'}`);
+        if(item.depth===0&&!item.leaf)roots.set(item.categoryId,{sourceReportedListings:n,sourceCountExact:r.exhaustiveNbHits===true});
+        if(!item.leaf && (n>900 || r.exhaustiveNbHits!==true)) {
+          if(item.depth>=40)throw new Error(`Partition depth exceeded for ${item.categoryId}`);
+          for(const filters of splitPartition(r,item.filters))next.push({categoryId:item.categoryId,filters,depth:item.depth+1,page:0});
+          partitions++;continue;
+        }
+        let leaf=item.leaf;
+        if(!leaf){leaf={expected:n,ids:new Set(),categoryId:item.categoryId};leaves.push(leaf);}
+        if(n!==leaf.expected||r.exhaustiveNbHits!==true)throw new Error(`Source changed while paging category ${item.categoryId}; retry refresh`);
+        for(const h of hits) {
+          const p=normaliseHit(h);
+          if(p.categoryId!==item.categoryId)throw new Error('Source ignored category filter');
+          leaf.ids.add(p.boxId);products.set(p.boxId,p);
+        }
+        if((item.page+1)*PAGE_SIZE<n)next.push({...item,leaf,page:item.page+1});
+      }
+      console.log(`Batch ${requests}: ${products.size} products, ${partitions} splits`);
+      await pause(100);
+    }
+    queue=next;
+  }
+  for(const leaf of leaves)if(leaf.ids.size!==leaf.expected)throw new Error(`Incomplete category ${leaf.categoryId}: ${leaf.ids.size}/${leaf.expected}`);
+  if(leaves.reduce((n,l)=>n+l.ids.size,0)!==products.size)throw new Error('Products crossed partitions during collection; retry refresh');
+  if(!products.size)throw new Error('Empty catalogue; preserving previous data');
+  return {products:[...products.values()],roots,requests,partitions};
+}
+async function main() {
+  let previous;try{previous=JSON.parse(await readFile('data/catalog.json','utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
+  const meta=await metadata(previous);
+  console.log(`Metadata: ${meta.superCategories.length} departments, ${meta.productLineCount} unique product lines, ${meta.categories.length} categories`);
+  const result=await collect(meta.categories);
+  const categories=reconcileCategories(meta.categories,result.products,meta.superCategories);
+  const generatedAt=new Date().toISOString(),byCategory=new Map(categories.map(c=>[c.id,[]]));
+  for(const p of result.products)byCategory.get(p.categoryId).push(p);
+  await mkdir('data/items',{recursive:true});
+  const keep=new Set((previous?.categories||[]).flatMap(c=>c.files||[]).map(f=>f.split('/').pop()));
+  for(const c of categories) {
+    const products=byCategory.get(c.id).sort((a,b)=>a.sellPrice-b.sellPrice||a.boxName.localeCompare(b.boxName));
+    Object.assign(c,result.roots.get(c.id),{coverage:'complete',files:[]});
+    for(let i=0;i<products.length;i+=500) {
+      const body=JSON.stringify({categoryId:c.id,products:products.slice(i,i+500)});
+      const hash=createHash('sha256').update(body).digest('hex').slice(0,16),name=`${c.id}-${i/500}-${hash}.json`;
+      await writeFile(`data/items/${name}`,body);c.files.push(`items/${name}`);keep.add(name);
+    }
+  }
+  const superCategories=meta.superCategories.map(s=>({...s,categoryCount:categories.filter(c=>c.superCatId===s.id).length,productCount:categories.filter(c=>c.superCatId===s.id).reduce((sum,c)=>sum+c.cheapListings,0)}));
+  const manifest={schemaVersion:2,generatedAt,source:SEARCH,scope:'CeX UK metadata categories; visible products priced at £50 or less',mode:'partitioned-category-shards',coverage:'complete',maxPrice:50,superCategoryCount:superCategories.length,productLineCount:meta.productLineCount,categoryCount:categories.length,productCount:result.products.length,requestCount:result.requests,partitionCount:result.partitions,superCategories,categories};
+  await writeFile('data/catalog.json',JSON.stringify(manifest));
+  // Keep the previous manifest's content-addressed shards for already-open pages.
+  for(const name of await readdir('data/items'))if(!keep.has(name))await rm(`data/items/${name}`);
+  await rm('data/super',{recursive:true,force:true});
+  console.log(`Validated and wrote ${result.products.length} products in ${categories.length} categories (${result.partitions} partitions)`);
+}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)main().catch(e=>{console.error(e);process.exit(1);});

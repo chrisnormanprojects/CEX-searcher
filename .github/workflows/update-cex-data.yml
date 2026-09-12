@@ -8,7 +8,7 @@ on:
       - 'scripts/**'
       - '.github/workflows/update-cex-data.yml'
   schedule:
-    - cron: '17 * * * *'
+    - cron: '23 * * * *'
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -32,8 +32,17 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Fetch CeX catalogue
-        run: node scripts/fetch-cex.mjs
+      - name: Verify collection logic
+        run: node --test scripts/catalogue-core.test.mjs
+
+      - name: Fetch and validate CeX catalogue
+        run: |
+          for attempt in 1 2 3; do
+            if node scripts/fetch-cex.mjs; then exit 0; fi
+            echo "Refresh incomplete; retrying without publishing ($attempt/3)"
+            sleep 10
+          done
+          exit 1
 
       - name: Commit refreshed data
         run: |

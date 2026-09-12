@@ -1,59 +1,40 @@
 # CeX Bargain Finder UK
 
-A mobile-first bargain finder covering CeX UK's category catalogue.
+Search CeX UK products priced at £50 or less. Choose a department and a category, then filter by name, price or availability. Select **All categories** to search the chosen department. Results display 100 at a time with a Show more button.
 
-## Current scope
+## Catalogue collection
 
-- Discovers the current CeX UK department, product-line and category structure from CeX metadata
-- Covers all categories returned by that metadata rather than a single fixed category
-- Catalogue generated automatically by GitHub Actions
-- Products priced at **£50 or less**
-- Search by product/model/name locally in the browser
-- Department and category filters
-- Cheapest-first, rating and A–Z sorting
-- Online stock plus named CeX store availability where supplied by the search catalogue
-- CeX cash and voucher trade-in values
-- Direct links back to CeX product pages
+The updater discovers departments, unique product lines and categories from CeX metadata. Metadata errors or the disappearance of previously published categories stop publication for review; partial discovery never silently removes categories.
 
-## Data pipeline
+CeX's search endpoint limits a query to 1,000 results. The updater recursively splits large queries using the source's available facets. Each split is a positive filter group plus its negative complement, so multi-valued facets do not create overlapping partitions and missing attributes remain covered. Leaves are below 1,000 results and every page must match its exact count. Approximate counts, unsplittable groups, source errors or incomplete pages cause the refresh to fail without committing data. The workflow retries up to three times.
 
-CeX's older `wss2.cex.uk.webuy.io/v3/boxes` search endpoint returns HTTP 403 from GitHub-hosted runners. The current CeX web search uses an Algolia-compatible endpoint at:
+Category counts show actual saved products. `sourceReportedListings` and `sourceCountExact` retain the source's separate count/estimate. `coverage: complete` means every collected partition passed its count check, not a guarantee that CeX's index contains every product CeX sells. The feed is live and can change during a refresh.
 
-`https://search.webuy.io/1/indexes/*/queries`
+Products and category filters share one department mapping, reconciled against product `scId`. Conflicting assignments stop publication. Empty categories retain their metadata department. No historical category count (such as 540) is assumed to be current.
 
-The fetcher first reads CeX's current super-category, product-line and category metadata. It then sends **batched Algolia queries** for every discovered category. Each query is filtered to products priced at £50 or less, and categories with more than one page of bargains are paginated automatically.
+## Generated data
 
-The primary search index is CeX's price-ascending `prod_cex_uk_price_asc` replica. If that fails, the fetcher automatically retries the catalogue with the generic `prod_cex_uk` index while keeping the same numeric price filter. Batching means hundreds of CeX categories can be refreshed with far fewer network requests than making one HTTP request per category page.
+- `data/catalog.json`: schema version 2, refresh timestamp, category hierarchy, actual counts and shard filenames.
+- `data/items/*.json`: up to 500 products per content-addressed file. Categories load independently, with four concurrent downloads.
+- The previous manifest's shards remain for one further refresh so already-open pages have time to finish loading.
+- The client cancels superseded loads and ignores stale responses. It renders only the first 100 matches initially.
 
-The generated `data/catalog.json` includes the current department/category hierarchy as well as the bargain products, so the static frontend can build its filters without making any CeX requests in the visitor's browser.
+Legacy department files remain readable by the client during migration. The first successful new refresh replaces them with category shards. Failed collection does not publish partial data.
 
-## Sources researched
+## Updates and deployment
 
-Before settling on the current pipeline, the project was cross-checked against several independent implementations and community reports:
+The workflow is scheduled hourly at minute 23 UTC, supports manual runs and runs after script/workflow changes. GitHub scheduling may be delayed or skipped; this is not a guaranteed hourly service. The site displays the real data age and flags data older than two hours. It does not call stale data live.
 
-- `Dionakra/webuy-api` and maintained forks document the older CeX `/v3` endpoints, category IDs and response fields.
-- `rorycl/cexfind` documents real-world Cloudflare blocking when CeX searches are made from cloud-hosted infrastructure.
-- Other GitHub CeX integrations capture the site's `search.webuy.io`/Algolia responses and use the `prod_cex_uk` index.
-- Reddit CeX developer discussions independently identify Algolia as the current search backend and report the same 403/cloud-hosting problems with older approaches.
-- CeXDB is an independent CeX catalogue/price-history service and is useful as an external sanity check, but no documented public API suitable for this project was found, so the app does not depend on it.
-- Third-party hosted scrapers such as Apify exist, but adding an external scraper dependency is unnecessary while CeX's own search feed remains accessible.
+The workflow validates collection logic, fetches and checks data, then commits only after success. GitHub Pages publishes the root of `main`. Existing push/rebase retries handle concurrent commits. No additional external scheduler or credentials are required.
 
-The project intentionally does **not** depend on public CORS proxies or an undocumented third-party private API.
+## Verification
 
-## Automatic updates
+Run `node --test scripts/catalogue-core.test.mjs` and `node --check app.js`. A production refresh must complete successfully before updated catalogue coverage can be claimed.
 
-`.github/workflows/update-cex-data.yml` runs hourly at minute 17 and whenever the fetch script or workflow changes. It refreshes `data/catalog.json` and commits changed data back to `main`.
+## Sources and limitations
 
-The frontend is static GitHub Pages and reads the generated JSON, so normal visitors do not make CeX API calls themselves.
+Metadata: `https://wss2.cex.uk.webuy.io/v3`.
+Search: `https://search.webuy.io/1/indexes/*/queries`, index `prod_cex_uk_price_asc`.
+These are endpoints used by CeX's web applications, not a documented public developer API. Access or schema changes can prevent a refresh. No CORS proxy or paid third-party scraper is required. Prices and stock are snapshots; confirm at CeX before purchasing or travelling.
 
-## Reliability
-
-This uses endpoints consumed by CeX's own web applications, not a documented public developer API. Their schema, index names or access rules may change. The workflow fails rather than silently replacing a good catalogue with an empty one.
-
-## GitHub Pages
-
-The site runs directly from the repository root on GitHub Pages using the `main` branch and `/(root)`.
-
-## Disclaimer
-
-Independent utility. Not affiliated with or endorsed by CeX. Prices and availability can change quickly; confirm on the official CeX website before purchasing or travelling.
+Independent utility. Not affiliated with or endorsed by CeX.
