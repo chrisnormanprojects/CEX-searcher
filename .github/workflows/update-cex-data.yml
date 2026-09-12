@@ -2,6 +2,11 @@ name: Update CeX data
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/update-cex-data.yml'
   schedule:
     - cron: '17 * * * *'
 
