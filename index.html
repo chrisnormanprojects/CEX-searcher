@@ -4,24 +4,24 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1220" />
-  <title>CeX PCI-Express Graphics Card Bargain Finder UK</title>
+  <title>CeX Bargain Finder UK</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">CEX PCI-EXPRESS GRAPHICS CARDS • UK</p>
-        <h1>Find cheap graphics cards at CeX</h1>
-        <p class="subtitle">Focused only on CeX PCI-Express graphics cards, using the same search catalogue that powers CeX's website. Browse prices, trade-in values, online stock and named store availability.</p>
+        <p class="eyebrow">CEX BARGAIN FINDER • UK</p>
+        <h1>Find cheap products across CeX</h1>
+        <p class="subtitle">Search the full CeX UK category catalogue for bargains priced at £50 or less, with prices, trade-in values, online stock and named store availability.</p>
       </div>
       <div class="status" id="statusPill">Ready</div>
     </header>
 
     <section class="panel controls" aria-label="Search controls">
       <label class="field wide">
-        <span>Search graphics cards</span>
-        <input id="query" type="search" value="" placeholder="e.g. RTX 3060, GTX 1660, RX 580" autocomplete="off" />
+        <span>Search CeX</span>
+        <input id="query" type="search" value="" placeholder="e.g. RTX 3060, iPhone, Zelda, Blu-ray" autocomplete="off" />
       </label>
 
       <label class="field">
@@ -30,17 +30,24 @@
       </label>
 
       <label class="field">
-        <span>Scope</span>
+        <span>Department</span>
+        <select id="superCategory">
+          <option value="">All departments</option>
+        </select>
+      </label>
+
+      <label class="field wide">
+        <span>Category</span>
         <select id="category">
-          <option value="">All PCI-Express graphics cards</option>
+          <option value="">All categories</option>
         </select>
       </label>
 
       <label class="check"><input id="onlineOnly" type="checkbox" /><span>Online stock only</span></label>
       <label class="check"><input id="hideZero" type="checkbox" checked /><span>Hide unavailable</span></label>
 
-      <button id="searchBtn" class="primary">Search graphics cards</button>
-      <button id="locationBtn" class="secondary">Catalogue stock summary</button>
+      <button id="searchBtn" class="primary">Search CeX</button>
+      <button id="locationBtn" class="secondary">Catalogue summary</button>
     </section>
 
     <section class="summary" aria-live="polite">
@@ -70,7 +77,7 @@
 
     <footer>
       <p>Independent CeX stock-search utility. Not affiliated with or endorsed by CeX.</p>
-      <p>Focused on Computing → Graphics and Capture Cards → PCI-Express Graphics Cards. Data is refreshed hourly from CeX's web-search catalogue; confirm price and availability on CeX before purchase or travel.</p>
+      <p>Data is refreshed hourly from CeX's web-search catalogue across all available UK categories. Confirm price and availability on CeX before purchase or travel.</p>
     </footer>
   </main>
 
