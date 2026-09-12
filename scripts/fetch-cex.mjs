@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 
 const META_API='https://wss2.cex.uk.webuy.io/v3';
 const SEARCH_API='https://search.webuy.io/1/indexes/*/queries';
-const INDEX='prod_cex_uk';
+const INDEX='prod_cex_uk_price_asc';
 const OUT='data/catalog.json';
 const CATEGORY_ID=892;
 const MAX_PRICE=50;
@@ -15,7 +15,7 @@ const data=j=>j?.response?.data||{};
 async function fetchJson(url,options={},timeout=20000){
  const c=new AbortController();const timer=setTimeout(()=>c.abort(),timeout);
  try{
-  const r=await fetch(url,{...options,signal:c.signal,headers:{accept:'application/json','content-type':'application/json','user-agent':'Mozilla/5.0 (compatible; CEX-searcher/2.1; +https://github.com/chrisnormanprojects/CEX-searcher)',...(options.headers||{})}});
+  const r=await fetch(url,{...options,signal:c.signal,headers:{accept:'application/json','content-type':'application/json','user-agent':'Mozilla/5.0 (compatible; CEX-searcher/2.2; +https://github.com/chrisnormanprojects/CEX-searcher)',...(options.headers||{})}});
   const text=await r.text();
   if(!r.ok)throw new Error(`HTTP ${r.status} ${url}: ${text.slice(0,180)}`);
   return JSON.parse(text);
@@ -70,19 +70,19 @@ async function main(){
  for(let page=0;page<MAX_PAGES;page++){
   const started=Date.now();
   const r=await algoliaPage(page);reportedHits=r.nbHits;
-  let added=0,maxSeen=null;
+  let added=0,minSeen=null,maxSeen=null;
   for(const h of r.hits){
-   const price=Number(h.sellPrice);if(Number.isFinite(price))maxSeen=maxSeen==null?price:Math.max(maxSeen,price);
+   const price=Number(h.sellPrice);if(Number.isFinite(price)){minSeen=minSeen==null?price:Math.min(minSeen,price);maxSeen=maxSeen==null?price:Math.max(maxSeen,price)}
    const p=normaliseHit(h);if(p&&!byId.has(p.boxId)){byId.set(p.boxId,p);added++}
   }
-  diagnostics.push({page,hits:r.hits.length,nbHits:r.nbHits,nbPages:r.nbPages,added,maxSeen,ms:Date.now()-started});
-  console.log(`Algolia page ${page}: ${r.hits.length} hits; total=${r.nbHits}; added<=£${MAX_PRICE}=${added}; max=${maxSeen}`);
+  diagnostics.push({page,index:r.index,hits:r.hits.length,nbHits:r.nbHits,nbPages:r.nbPages,added,minSeen,maxSeen,ms:Date.now()-started});
+  console.log(`Algolia page ${page}: ${r.hits.length} hits; total=${r.nbHits}; added<=£${MAX_PRICE}=${added}; range=£${minSeen}-£${maxSeen}`);
   if(!r.hits.length||page+1>=r.nbPages)break;
-  if(maxSeen!=null&&maxSeen>MAX_PRICE)break;
+  if(minSeen!=null&&minSeen>MAX_PRICE)break;
   await sleep(100);
  }
  const products=[...byId.values()].sort((a,b)=>a.sellPrice-b.sellPrice);
- const payload={generatedAt:new Date().toISOString(),source:SEARCH_API,scope:'Computing > Graphics and Capture Cards > PCI-Express Graphics Cards',mode:'direct-algolia',maxPrice:MAX_PRICE,category:{id:CATEGORY_ID,name:category.categoryFriendlyName,totalBoxes},catalogueListings:reportedHits||totalBoxes,productCount:products.length,boxesBlocked:false,diagnostics,products};
+ const payload={generatedAt:new Date().toISOString(),source:SEARCH_API,scope:'Computing > Graphics and Capture Cards > PCI-Express Graphics Cards',mode:'direct-algolia-price-asc',maxPrice:MAX_PRICE,category:{id:CATEGORY_ID,name:category.categoryFriendlyName,totalBoxes},catalogueListings:reportedHits||totalBoxes,productCount:products.length,boxesBlocked:false,diagnostics,products};
  await mkdir('data',{recursive:true});await writeFile(OUT,JSON.stringify(payload,null,2));
  console.log(`Wrote ${products.length} PCI-Express graphics cards priced at £${MAX_PRICE} or less to ${OUT}`);
  if(!products.length)process.exitCode=2;
