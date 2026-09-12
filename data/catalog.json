@@ -1,156 +1,25 @@
 {
-  "generatedAt": "2026-09-12T03:35:30.868Z",
+  "generatedAt": "2026-09-12T03:36:52.648Z",
   "source": "https://wss2.cex.uk.webuy.io/v3",
-  "scope": "Computing > PC components",
-  "mode": "pc-component-search-fallback",
+  "scope": "Computing > Graphics and Capture Cards",
+  "mode": "graphics-capture-search-fallback",
   "maxPrice": 50,
-  "computingProductLineCount": 13,
-  "pcComponentProductLineCount": 5,
-  "computingCategoryCount": 60,
-  "pcComponentCategoryCount": 23,
-  "pcComponentCatalogueListings": 16741,
-  "productLines": [
-    {
-      "id": 8,
-      "name": "Data Storage",
-      "totalCategories": 9
-    },
-    {
-      "id": 7,
-      "name": "Graphics and Capture Cards",
-      "totalCategories": 2
-    },
-    {
-      "id": 10,
-      "name": "Internal Memory",
-      "totalCategories": 8
-    },
-    {
-      "id": 14,
-      "name": "Optical Drives",
-      "totalCategories": 2
-    },
-    {
-      "id": 16,
-      "name": "Processors",
-      "totalCategories": 2
-    }
-  ],
+  "productLine": {
+    "id": 7,
+    "name": "Graphics and Capture Cards"
+  },
+  "categoryCount": 2,
+  "catalogueListings": 2826,
   "categories": [
-    {
-      "id": 884,
-      "name": "USB Flash Drives",
-      "totalBoxes": 742
-    },
-    {
-      "id": 885,
-      "name": "USB External Hard Drives",
-      "totalBoxes": 2132
-    },
-    {
-      "id": 886,
-      "name": "SATA Hard Drives",
-      "totalBoxes": 979
-    },
-    {
-      "id": 888,
-      "name": "IDE Hard Drives",
-      "totalBoxes": 32
-    },
-    {
-      "id": 890,
-      "name": "Laptop Hard Drives",
-      "totalBoxes": 311
-    },
     {
       "id": 892,
       "name": "PCI-Express Graphics Cards",
-      "totalBoxes": 2506
-    },
-    {
-      "id": 910,
-      "name": "AMD Processors",
-      "totalBoxes": 426
-    },
-    {
-      "id": 911,
-      "name": "Intel Processors",
-      "totalBoxes": 708
-    },
-    {
-      "id": 913,
-      "name": "Blu-Ray Drives",
-      "totalBoxes": 49
-    },
-    {
-      "id": 914,
-      "name": "DVD-RW Drives",
-      "totalBoxes": 51
-    },
-    {
-      "id": 935,
-      "name": "DDR2 - Desktop 240 Pin",
-      "totalBoxes": 49
-    },
-    {
-      "id": 936,
-      "name": "DDR3 - Desktop 240 Pin",
-      "totalBoxes": 56
-    },
-    {
-      "id": 938,
-      "name": "DDR2 - Laptop 200 Pin",
-      "totalBoxes": 28
-    },
-    {
-      "id": 939,
-      "name": "DDR3 - Laptop 204 Pin",
-      "totalBoxes": 25
-    },
-    {
-      "id": 946,
-      "name": "Network Attached Hard Drives",
-      "totalBoxes": 1704
-    },
-    {
-      "id": 1014,
-      "name": "DDR4 - Desktop 288pin",
-      "totalBoxes": 70
-    },
-    {
-      "id": 1021,
-      "name": "DDR4 - Laptop 260 Pin",
-      "totalBoxes": 27
-    },
-    {
-      "id": 1148,
-      "name": "NVMe SSDs",
-      "totalBoxes": 2343
-    },
-    {
-      "id": 1149,
-      "name": "SATA SSDs",
-      "totalBoxes": 2607
-    },
-    {
-      "id": 1150,
-      "name": "External USB SSDs",
-      "totalBoxes": 506
+      "totalBoxes": 2503
     },
     {
       "id": 1153,
       "name": "Capture Cards",
       "totalBoxes": 323
-    },
-    {
-      "id": 1156,
-      "name": "DDR5 - Desktop 288pin",
-      "totalBoxes": 1048
-    },
-    {
-      "id": 1157,
-      "name": "DDR5 - Laptop 262 Pin",
-      "totalBoxes": 19
     }
   ],
   "productCount": 0,
