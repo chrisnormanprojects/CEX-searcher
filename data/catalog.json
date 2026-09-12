@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-12T03:54:38.172Z",
+  "generatedAt": "2026-09-12T04:04:43.597Z",
   "source": "https://search.webuy.io/1/indexes/*/queries",
   "scope": "Computing > Graphics and Capture Cards > PCI-Express Graphics Cards",
   "mode": "direct-algolia-price-asc",
@@ -22,7 +22,7 @@
       "added": 100,
       "minSeen": 1,
       "maxSeen": 12,
-      "ms": 475
+      "ms": 570
     },
     {
       "page": 1,
@@ -33,7 +33,7 @@
       "added": 100,
       "minSeen": 12,
       "maxSeen": 25,
-      "ms": 362
+      "ms": 154
     },
     {
       "page": 2,
@@ -44,7 +44,7 @@
       "added": 37,
       "minSeen": 25,
       "maxSeen": 115,
-      "ms": 188
+      "ms": 134
     },
     {
       "page": 3,
@@ -55,7 +55,7 @@
       "added": 0,
       "minSeen": 125,
       "maxSeen": 190,
-      "ms": 112
+      "ms": 145
     }
   ],
   "products": [
