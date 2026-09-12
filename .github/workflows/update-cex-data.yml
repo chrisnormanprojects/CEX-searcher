@@ -23,10 +23,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -37,10 +39,17 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/catalog.json
+          git add -A data/
           if git diff --cached --quiet; then
             echo "No data changes"
             exit 0
           fi
           git commit -m "Update CeX catalogue"
-          git push
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            echo "Push raced with another commit; rebasing and retrying ($attempt/3)"
+            git pull --rebase origin main
+            sleep $((attempt * 2))
+          done
+          echo "Unable to publish refreshed catalogue after 3 attempts"
+          exit 1
