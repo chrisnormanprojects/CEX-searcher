@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-12T03:40:18.181Z",
+  "generatedAt": "2026-09-12T03:43:07.867Z",
   "source": "https://wss2.cex.uk.webuy.io/v3",
   "scope": "Computing > Graphics and Capture Cards > PCI-Express Graphics Cards",
-  "mode": "pci-express-search-fallback",
+  "mode": "route-probe",
   "maxPrice": 50,
   "category": {
     "id": 892,
@@ -10,6 +10,58 @@
     "totalBoxes": 2503
   },
   "catalogueListings": 2503,
+  "workingRoute": null,
+  "routeDiagnostics": [
+    {
+      "name": "direct",
+      "status": 403,
+      "ok": false,
+      "json": false,
+      "matchingProducts": 0,
+      "ms": 19
+    },
+    {
+      "name": "community-worker",
+      "status": 403,
+      "ok": false,
+      "json": false,
+      "matchingProducts": 0,
+      "ms": 386
+    },
+    {
+      "name": "allorigins",
+      "status": null,
+      "ok": false,
+      "json": false,
+      "matchingProducts": 0,
+      "ms": 12002,
+      "error": "This operation was aborted"
+    },
+    {
+      "name": "corsproxy.io",
+      "status": 403,
+      "ok": false,
+      "json": false,
+      "matchingProducts": 0,
+      "ms": 64
+    },
+    {
+      "name": "cors.lol",
+      "status": 429,
+      "ok": false,
+      "json": false,
+      "matchingProducts": 0,
+      "ms": 465
+    },
+    {
+      "name": "cors.eu.org",
+      "status": 403,
+      "ok": false,
+      "json": false,
+      "matchingProducts": 0,
+      "ms": 344
+    }
+  ],
   "productCount": 0,
   "boxesBlocked": true,
   "products": []
