@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install browser client
+        run: npm install --no-save --no-package-lock playwright-core@1.55.0
+
       - name: Fetch CeX catalogue
         run: node scripts/fetch-cex.mjs
 
