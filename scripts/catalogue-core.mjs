@@ -27,7 +27,7 @@ export function splitPartition(result, filters) {
 
 export function normaliseHit(h) {
   const categoryId=Number(h.categoryId),sellPrice=Number(h.sellPrice),boxId=String(h.boxId??h.objectID??'').trim();
-  if(!boxId || !Number.isFinite(categoryId) || !Number.isFinite(sellPrice) || sellPrice<0 || sellPrice>50) throw new Error('Invalid product in source response');
+  if(!boxId || !Number.isFinite(categoryId) || !Number.isFinite(sellPrice) || sellPrice<0) throw new Error('Invalid product in source response');
   const stores=Array.isArray(h.stores)?h.stores.map(String):[];
   const availability=Array.isArray(h.availability)?h.availability:[];
   const online=availability.includes('In Stock Online')||Number(h.ecomQuantity)>0;

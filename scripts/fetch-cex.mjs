@@ -38,7 +38,7 @@ async function metadata(previous) {
 }
 function requestFor(item) {
   return {indexName:INDEX,params:new URLSearchParams({query:'',page:String(item.page||0),hitsPerPage:String(PAGE_SIZE),
-    facetFilters:JSON.stringify(item.filters),filters:'boxVisibilityOnWeb=1',numericFilters:JSON.stringify(['sellPrice>=0','sellPrice<=50']),
+    facetFilters:JSON.stringify(item.filters),filters:'boxVisibilityOnWeb=1',numericFilters:JSON.stringify(['sellPrice>=0']),
     facets:item.leaf?'[]':'["*"]',maxValuesPerFacet:'100',attributesToRetrieve:JSON.stringify(ATTRIBUTES),attributesToHighlight:'[]',attributesToSnippet:'[]'}).toString()};
 }
 export async function collect(categories, query=async requests=>(await fetchJson(SEARCH,{method:'POST',body:JSON.stringify({requests})})).results, pause=sleep) {
@@ -92,15 +92,18 @@ async function main() {
   const keep=new Set((previous?.categories||[]).flatMap(c=>c.files||[]).map(f=>f.split('/').pop()));
   for(const c of categories) {
     const products=byCategory.get(c.id).sort((a,b)=>a.sellPrice-b.sellPrice||a.boxName.localeCompare(b.boxName));
-    Object.assign(c,result.roots.get(c.id),{coverage:'complete',files:[]});
-    for(let i=0;i<products.length;i+=500) {
-      const body=JSON.stringify({categoryId:c.id,products:products.slice(i,i+500)});
-      const hash=createHash('sha256').update(body).digest('hex').slice(0,16),name=`${c.id}-${i/500}-${hash}.json`;
-      await writeFile(`data/items/${name}`,body);c.files.push(`items/${name}`);keep.add(name);
+    Object.assign(c,result.roots.get(c.id),{coverage:'complete',productCount:products.length,under50Listings:products.filter(p=>p.sellPrice<=50).length,over50Listings:products.filter(p=>p.sellPrice>50).length,files:[],priceFiles:{under50:[],over50:[]}});
+    for(const band of ['under50','over50']) {
+    const bandProducts=products.filter(p=>band==='over50'?p.sellPrice>50:p.sellPrice<=50);
+    for(let i=0;i<bandProducts.length;i+=500) {
+      const body=JSON.stringify({categoryId:c.id,products:bandProducts.slice(i,i+500)});
+      const hash=createHash('sha256').update(body).digest('hex').slice(0,16),name=`${c.id}-${band}-${i/500}-${hash}.json`;
+      await writeFile(`data/items/${name}`,body);c.files.push(`items/${name}`);c.priceFiles[band].push(`items/${name}`);keep.add(name);
     }
   }
+  }
   const superCategories=meta.superCategories.map(s=>({...s,categoryCount:categories.filter(c=>c.superCatId===s.id).length,productCount:categories.filter(c=>c.superCatId===s.id).reduce((sum,c)=>sum+c.cheapListings,0)}));
-  const manifest={schemaVersion:2,generatedAt,source:SEARCH,scope:'CeX UK metadata categories; visible products priced at £50 or less',mode:'partitioned-category-shards',coverage:'complete',maxPrice:50,superCategoryCount:superCategories.length,productLineCount:meta.productLineCount,categoryCount:categories.length,productCount:result.products.length,requestCount:result.requests,partitionCount:result.partitions,superCategories,categories};
+  const manifest={schemaVersion:2,generatedAt,source:SEARCH,scope:'CeX UK metadata categories; visible products at all prices',priceScope:'all',mode:'partitioned-category-shards',coverage:'complete',maxPrice:null,superCategoryCount:superCategories.length,productLineCount:meta.productLineCount,categoryCount:categories.length,productCount:result.products.length,requestCount:result.requests,partitionCount:result.partitions,superCategories,categories};
   await writeFile('data/catalog.json',JSON.stringify(manifest));
   // Keep the previous manifest's content-addressed shards for already-open pages.
   for(const name of await readdir('data/items'))if(!keep.has(name))await rm(`data/items/${name}`);

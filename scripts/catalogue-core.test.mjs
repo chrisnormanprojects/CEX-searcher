@@ -15,8 +15,8 @@ test('Apple dropdown and files use the same source department and actual count',
  assert.equal(result[0].superCatId,3);assert.equal(result[0].superCatName,'Computing');assert.equal(result[0].cheapListings,1);assert.equal(p.outOfStock,0);
  assert.throws(()=>reconcileCategories(cats,[p,{...p,superCatId:5}],[{id:3,name:'Computing'},{id:5,name:'Electronics'}]),/Conflicting/);
 });
-test('invalid and over-budget products cannot silently enter the catalogue',()=>{
- for(const price of [-1,51,NaN])assert.throws(()=>normaliseHit({boxId:'x',categoryId:1,sellPrice:price}),/Invalid/);
+test('invalid prices cannot enter the catalogue',()=>{
+ for(const price of [-1,NaN,Infinity])assert.throws(()=>normaliseHit({boxId:'x',categoryId:1,sellPrice:price}),/Invalid/);
 });
 import {collect} from './fetch-cex.mjs';
 test('collector retrieves all 2,500 equal-price products across capped queries',async()=>{
@@ -33,4 +33,19 @@ test('collector retrieves all 2,500 equal-price products across capped queries',
 });
 test('missing page records prevent successful collection',async()=>{
  await assert.rejects(()=>collect([{id:40}],async()=>[{nbHits:5,exhaustiveNbHits:true,facets:{},hits:[]}],async()=>{}),/Incomplete category/);
+});
+
+test('higher-priced products remain in the catalogue, including just above £50',()=>{for(const sellPrice of [50,50.01,51,1000])assert.equal(normaliseHit({boxId:'x',categoryId:1,sellPrice}).sellPrice,sellPrice);});
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+test('over £50 filter excludes £50 and restores the previous maximum when unticked',()=>{
+ const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+ const code=app.slice(app.indexOf('function filtered()'),app.indexOf('function render('));
+ const els={over50Only:{checked:true},maxPrice:{value:'20'},query:{value:''},onlineOnly:{checked:false},hideZero:{checked:false},sortBy:{value:'price'}};
+ const context={els,products:[20,50,50.01,51,1000].map(sellPrice=>({sellPrice,boxName:String(sellPrice)})),normalise:s=>String(s).toLowerCase()};
+ vm.createContext(context);vm.runInContext(code,context);
+ assert.equal(JSON.stringify(vm.runInContext('filtered().map(p=>p.sellPrice)',context)),JSON.stringify([50.01,51,1000]));
+ els.over50Only.checked=false;
+ assert.equal(JSON.stringify(vm.runInContext('filtered().map(p=>p.sellPrice)',context)),JSON.stringify([20]));
+ assert.equal(els.maxPrice.value,'20');
 });
