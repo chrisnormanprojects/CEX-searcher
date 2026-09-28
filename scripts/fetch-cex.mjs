@@ -31,9 +31,14 @@ async function metadata(previous) {
     for(const c of cs) cats.set(Number(c.categoryId),{id:Number(c.categoryId),name:c.categoryFriendlyName??c.categoryName,categoryName:c.categoryName??'',productLineId:Number(c.productLineId??p.productLineId),productLineName:c.productLineName??p.productLineName??p.productLineFriendlyName??'',superCatId:Number(c.superCatId??p.superCatId),totalBoxes:Number(c.totalBoxes)||0});
   }
   if(!cats.size)throw new Error('No categories');
-  // A failed metadata branch must never silently remove a department/category.
+  // A failed metadata branch must never silently remove a category that still
+  // held products. CeX can retire already-empty categories from metadata, so
+  // allow those to disappear once the previous validated catalogue confirms
+  // that they had no products or source listings.
   const missing=(previous?.categories||[]).filter(c=>!cats.has(c.id));
-  if(missing.length)throw new Error(`Metadata omitted ${missing.length} previous categories (${missing.map(c=>c.id).join(',')}); review retirement before publishing`);
+  const unsafeMissing=missing.filter(c=>Number(c.productCount)>0||Number(c.sourceReportedListings)>0);
+  if(unsafeMissing.length)throw new Error(`Metadata omitted ${unsafeMissing.length} non-empty previous categories (${unsafeMissing.map(c=>c.id).join(',')}); review retirement before publishing`);
+  if(missing.length)console.log(`Retiring ${missing.length} empty categories omitted by CeX metadata: ${missing.map(c=>c.id).join(',')}`);
   return {superCategories:superCats.map(s=>({id:Number(s.superCatId),name:s.superCatFriendlyName??s.superCatName})),categories:[...cats.values()],productLineCount:lines.size};
 }
 function requestFor(item) {
