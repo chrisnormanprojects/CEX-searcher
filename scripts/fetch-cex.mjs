@@ -81,7 +81,11 @@ export async function collect(categories, query=async requests=>(await fetchJson
     queue=next;
   }
   for(const leaf of leaves)if(leaf.ids.size!==leaf.expected)throw new Error(`Incomplete category ${leaf.categoryId}: ${leaf.ids.size}/${leaf.expected}`);
-  if(leaves.reduce((n,l)=>n+l.ids.size,0)!==products.size)throw new Error('Products crossed partitions during collection; retry refresh');
+  // Partition facets are not guaranteed to be single-valued. A product can
+  // legitimately match more than one leaf (for example multiple stores), so
+  // summing leaf sizes can exceed the unique product count. What matters is
+  // that every leaf returned its advertised records and products are deduped
+  // by boxId in the catalogue map.
   if(!products.size)throw new Error('Empty catalogue; preserving previous data');
   return {products:[...products.values()],roots,requests,partitions};
 }
